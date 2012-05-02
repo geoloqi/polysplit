@@ -29,6 +29,30 @@ polysplit [opts] <input datasource> <output datasource>
     -m    Max vertices per output polygon (defaults to 250)
     -v    Verbose mode
 
+--------
+Examples
+--------
+
+$ ./polysplit world_borders.shp world_borders_split.shp
+
+Split a Shapefile of national borders into polygons of no more than 250
+vertices, and put them into another Shapefile, using the feature ID from the
+first Shapefile as the key for the second.
+
+$ ./polysplit -f GeoJSON -m 100 world_borders.shp world_borders.json
+
+Split a Shapefile of national borders into polygons of no more than 100
+vertices, and put them into a GeoJSON file.
+
+$ ./polysplit -f PostgreSQL -n fid -i shapes -o pieces PG:dbname=gis PG:dbname=gis
+
+Split the polygons from the 'shapes' table in the PostGIS 'gis' database, and
+put them into the 'pieces' table in the same database, using the 'fid' column
+from the first table as the primary key of the new one.
+
+Install the GDAL binaries (the `gdal-bin` package on Debian/Ubuntu) and run
+`ogrinfo --formats` to see which formats your OGR library supports.
+
 -------------
 Prerequisites
 -------------
