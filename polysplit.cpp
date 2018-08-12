@@ -209,7 +209,7 @@ int main(int argc, char** argv) {
 
     /* Open the input data source */
 #if GDAL_VERSION_MAJOR >= 2
-    GDALDataset* source = static_cast<GDALDataset *>(GDALOpen( source_name, GA_ReadOnly ));
+    GDALDataset* source = static_cast<GDALDataset *>(GDALOpenEx( source_name, GDAL_OF_VECTOR | GDAL_OF_READONLY | GDAL_OF_VERBOSE_ERROR, nullptr, nullptr, nullptr ));
 #else
     OGRDataSource* source = OGRSFDriverRegistrar::Open( source_name, FALSE );
 #endif
