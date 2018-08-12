@@ -4,7 +4,7 @@
  * written by Schuyler Erle <schuyler@nocat.net>
  * copyright (c) 2012 Geoloqi, Inc.
  * published under the 3-clause BSD license -- see README.txt for details.
- * 
+ *
  */
 
 #include <cstdlib>
@@ -32,7 +32,7 @@ void split_polygons(OGRPolyList *pieces, OGRGeometry* geometry, int max_vertices
     /* split_polygons recursively splits the (multi)polygon into smaller
      * polygons until each polygon has at most max_vertices, and pushes each
      * one onto the pieces vector.
-     * 
+     *
      * Multipolygons are automatically divided into their constituent polygons.
      * Empty polygons and other geometry types are ignored. Invalid polygons
      * get cleaned up to the best of our ability, but this does trigger
@@ -47,21 +47,21 @@ void split_polygons(OGRPolyList *pieces, OGRGeometry* geometry, int max_vertices
         std::cerr << "WARNING: NULL geometry passed to split_polygons!\n";
         return;
     }
-    
+
     if (geometry->IsEmpty())
         return;
-    
+
     if (geometry->getGeometryType() == wkbMultiPolygon) {
         OGRMultiPolygon *multi = (OGRMultiPolygon*) geometry;
         for (int i = 0; i < multi->getNumGeometries(); i++) {
             split_polygons(pieces, multi->getGeometryRef(i), max_vertices);
         }
         return;
-    } 
-    
+    }
+
     if (geometry->getGeometryType() != wkbPolygon)
         return;
-    
+
     OGRPolygon* polygon = (OGRPolygon*) geometry;
     if (polygon->getExteriorRing()->getNumPoints() <= max_vertices) {
         pieces->push_back((OGRPolygon*) polygon->clone());
@@ -102,7 +102,7 @@ void split_polygons(OGRPolyList *pieces, OGRGeometry* geometry, int max_vertices
         OGRGeometry* piece = mask.Intersection(polygon);
         split_polygons(pieces, piece, max_vertices);
         delete piece;
-    } 
+    }
 
     if (polygonIsPwned) delete polygon;
 }
@@ -241,8 +241,8 @@ int main(int argc, char** argv) {
             std::cerr << "ID field " << id_field_name << " isn't integer type!\n";
             exit( 1 );
         }
-    } 
-    
+    }
+
     /* Create the output data source. */
     gdal_dataset_type* dest = create_destination(driver_name, dest_name,
                                              dest_layer_name, id_field_name);
@@ -268,7 +268,7 @@ int main(int argc, char** argv) {
         feature_id_t id = (id_field >= 0 ? feature->GetFieldAsInteger(id_field)
                                          : feature->GetFID());
         OGRGeometry *geometry = feature->GetGeometryRef();
-        
+
         /* Recursively split the geometry, and write a new feature for each
          * polygon that comes out. */
         split_polygons(&pieces, geometry, max_vertices);
@@ -295,6 +295,6 @@ int main(int argc, char** argv) {
     OGRDataSource::DestroyDataSource( dest );
 #endif
 
-    std::cerr << features_read << " features read, " 
+    std::cerr << features_read << " features read, "
               << features_written << " written.\n";
 }
