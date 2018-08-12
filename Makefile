@@ -1,4 +1,4 @@
-CFLAGS := -O3 -Wall $(shell gdal-config --cflags)
+CFLAGS := -O3 -Wall -Wextra $(shell gdal-config --cflags)
 # CFLAGS += -ggdb
 LIBS := $(shell gdal-config --libs)
 
