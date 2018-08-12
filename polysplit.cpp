@@ -17,6 +17,12 @@
 #define OUTPUTTYPE wkbPolygon
 #define IDFIELD "id"
 
+#if GDAL_VERSION_MAJOR >= 2
+    using gdal_dataset_type = GDALDataset;
+#else
+    using gdal_dataset_type = OGRDataSource;
+#endif
+
 typedef std::vector<OGRPolygon *> OGRPolyList;
 typedef int feature_id_t;
 
@@ -101,19 +107,26 @@ void split_polygons(OGRPolyList *pieces, OGRGeometry* geometry, int max_vertices
     if (polygonIsPwned) delete polygon;
 }
 
-OGRDataSource *create_destination(const char* drivername, const char* filename,
+gdal_dataset_type *create_destination(const char* drivername, const char* filename,
         const char *layername, const char *id_field_name) {
 
     /* Find the requested OGR output driver. */
-    OGRSFDriver* driver;
-    driver = OGRSFDriverRegistrar::GetRegistrar()->GetDriverByName(drivername);
+#if GDAL_VERSION_MAJOR >= 2
+    GDALDriver* driver = GetGDALDriverManager()->GetDriverByName(drivername);
+#else
+    OGRSFDriver* driver = OGRSFDriverRegistrar::GetRegistrar()->GetDriverByName(drivername);
+#endif
     if( driver == NULL ) {
         std::cerr << drivername << " driver not available.\n";
         return NULL;
     }
 
     /* Create the output data source. */
+#if GDAL_VERSION_MAJOR >= 2
+    GDALDataset* ds = driver->Create( filename, 0, 0, 0, GDT_Unknown, 0);
+#else
     OGRDataSource* ds = driver->CreateDataSource( filename, NULL );
+#endif
     if( ds == NULL ) {
         std::cerr << "Creation of output file " << filename << " failed.\n";
         return NULL;
@@ -188,11 +201,18 @@ int main(int argc, char** argv) {
     dest_name = argv[1];
 
     /* Register the OGR datasource drivers. */
+#if GDAL_VERSION_MAJOR >= 2
+    GDALAllRegister();
+#else
     OGRRegisterAll();
+#endif
 
     /* Open the input data source */
-    OGRDataSource* source;
-    source = OGRSFDriverRegistrar::Open( source_name, FALSE );
+#if GDAL_VERSION_MAJOR >= 2
+    GDALDataset* source = static_cast<GDALDataset *>(GDALOpen( source_name, GA_ReadOnly ));
+#else
+    OGRDataSource* source = OGRSFDriverRegistrar::Open( source_name, FALSE );
+#endif
     if( source == NULL ) {
         std::cerr << "Opening " << source_name << " failed." << std::endl;
         exit( 1 );
@@ -224,7 +244,7 @@ int main(int argc, char** argv) {
     } 
     
     /* Create the output data source. */
-    OGRDataSource* dest = create_destination(driver_name, dest_name,
+    gdal_dataset_type* dest = create_destination(driver_name, dest_name,
                                              dest_layer_name, id_field_name);
     if( dest == NULL ) exit( 1 );
 
@@ -267,8 +287,13 @@ int main(int argc, char** argv) {
     }
 
     /* Close the input and output data sources. */
+#if GDAL_VERSION_MAJOR >= 2
+    GDALClose(source);
+    GDALClose(dest);
+#else
     OGRDataSource::DestroyDataSource( source );
     OGRDataSource::DestroyDataSource( dest );
+#endif
 
     std::cerr << features_read << " features read, " 
               << features_written << " written.\n";
