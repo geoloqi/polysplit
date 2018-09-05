@@ -4,7 +4,7 @@
  * written by Schuyler Erle <schuyler@nocat.net>
  * copyright (c) 2012 Geoloqi, Inc.
  * published under the 3-clause BSD license -- see README.txt for details.
- * 
+ *
  */
 
 #include <cstdlib>
@@ -17,6 +17,12 @@
 #define OUTPUTTYPE wkbPolygon
 #define IDFIELD "id"
 
+#if GDAL_VERSION_MAJOR >= 2
+    using gdal_dataset_type = GDALDataset;
+#else
+    using gdal_dataset_type = OGRDataSource;
+#endif
+
 typedef std::vector<OGRPolygon *> OGRPolyList;
 typedef int feature_id_t;
 
@@ -26,7 +32,7 @@ void split_polygons(OGRPolyList *pieces, OGRGeometry* geometry, int max_vertices
     /* split_polygons recursively splits the (multi)polygon into smaller
      * polygons until each polygon has at most max_vertices, and pushes each
      * one onto the pieces vector.
-     * 
+     *
      * Multipolygons are automatically divided into their constituent polygons.
      * Empty polygons and other geometry types are ignored. Invalid polygons
      * get cleaned up to the best of our ability, but this does trigger
@@ -41,21 +47,21 @@ void split_polygons(OGRPolyList *pieces, OGRGeometry* geometry, int max_vertices
         std::cerr << "WARNING: NULL geometry passed to split_polygons!\n";
         return;
     }
-    
+
     if (geometry->IsEmpty())
         return;
-    
+
     if (geometry->getGeometryType() == wkbMultiPolygon) {
         OGRMultiPolygon *multi = (OGRMultiPolygon*) geometry;
         for (int i = 0; i < multi->getNumGeometries(); i++) {
             split_polygons(pieces, multi->getGeometryRef(i), max_vertices);
         }
         return;
-    } 
-    
+    }
+
     if (geometry->getGeometryType() != wkbPolygon)
         return;
-    
+
     OGRPolygon* polygon = (OGRPolygon*) geometry;
     if (polygon->getExteriorRing()->getNumPoints() <= max_vertices) {
         pieces->push_back((OGRPolygon*) polygon->clone());
@@ -96,24 +102,31 @@ void split_polygons(OGRPolyList *pieces, OGRGeometry* geometry, int max_vertices
         OGRGeometry* piece = mask.Intersection(polygon);
         split_polygons(pieces, piece, max_vertices);
         delete piece;
-    } 
+    }
 
     if (polygonIsPwned) delete polygon;
 }
 
-OGRDataSource *create_destination(const char* drivername, const char* filename,
+gdal_dataset_type *create_destination(const char* drivername, const char* filename,
         const char *layername, const char *id_field_name) {
 
     /* Find the requested OGR output driver. */
-    OGRSFDriver* driver;
-    driver = OGRSFDriverRegistrar::GetRegistrar()->GetDriverByName(drivername);
+#if GDAL_VERSION_MAJOR >= 2
+    GDALDriver* driver = GetGDALDriverManager()->GetDriverByName(drivername);
+#else
+    OGRSFDriver* driver = OGRSFDriverRegistrar::GetRegistrar()->GetDriverByName(drivername);
+#endif
     if( driver == NULL ) {
         std::cerr << drivername << " driver not available.\n";
         return NULL;
     }
 
     /* Create the output data source. */
+#if GDAL_VERSION_MAJOR >= 2
+    GDALDataset* ds = driver->Create( filename, 0, 0, 0, GDT_Unknown, 0);
+#else
     OGRDataSource* ds = driver->CreateDataSource( filename, NULL );
+#endif
     if( ds == NULL ) {
         std::cerr << "Creation of output file " << filename << " failed.\n";
         return NULL;
@@ -188,11 +201,18 @@ int main(int argc, char** argv) {
     dest_name = argv[1];
 
     /* Register the OGR datasource drivers. */
+#if GDAL_VERSION_MAJOR >= 2
+    GDALAllRegister();
+#else
     OGRRegisterAll();
+#endif
 
     /* Open the input data source */
-    OGRDataSource* source;
-    source = OGRSFDriverRegistrar::Open( source_name, FALSE );
+#if GDAL_VERSION_MAJOR >= 2
+    GDALDataset* source = static_cast<GDALDataset *>(GDALOpenEx( source_name, GDAL_OF_VECTOR | GDAL_OF_READONLY | GDAL_OF_VERBOSE_ERROR, nullptr, nullptr, nullptr ));
+#else
+    OGRDataSource* source = OGRSFDriverRegistrar::Open( source_name, FALSE );
+#endif
     if( source == NULL ) {
         std::cerr << "Opening " << source_name << " failed." << std::endl;
         exit( 1 );
@@ -221,10 +241,10 @@ int main(int argc, char** argv) {
             std::cerr << "ID field " << id_field_name << " isn't integer type!\n";
             exit( 1 );
         }
-    } 
-    
+    }
+
     /* Create the output data source. */
-    OGRDataSource* dest = create_destination(driver_name, dest_name,
+    gdal_dataset_type* dest = create_destination(driver_name, dest_name,
                                              dest_layer_name, id_field_name);
     if( dest == NULL ) exit( 1 );
 
@@ -248,7 +268,7 @@ int main(int argc, char** argv) {
         feature_id_t id = (id_field >= 0 ? feature->GetFieldAsInteger(id_field)
                                          : feature->GetFID());
         OGRGeometry *geometry = feature->GetGeometryRef();
-        
+
         /* Recursively split the geometry, and write a new feature for each
          * polygon that comes out. */
         split_polygons(&pieces, geometry, max_vertices);
@@ -267,9 +287,14 @@ int main(int argc, char** argv) {
     }
 
     /* Close the input and output data sources. */
+#if GDAL_VERSION_MAJOR >= 2
+    GDALClose(source);
+    GDALClose(dest);
+#else
     OGRDataSource::DestroyDataSource( source );
     OGRDataSource::DestroyDataSource( dest );
+#endif
 
-    std::cerr << features_read << " features read, " 
+    std::cerr << features_read << " features read, "
               << features_written << " written.\n";
 }
